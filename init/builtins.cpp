@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <net/if.h>
@@ -391,6 +392,37 @@ static int wipe_data_via_recovery()
     while (1) { pause(); }  // never reached
 }
 
+void import_late()
+{
+    static const std::vector<std::string> init_directories = {
+        "/system/etc/init",
+        "/vendor/etc/init",
+        "/odm/etc/init"
+    };
+
+    for (const auto& dir : init_directories) {
+        if (!is_dir(dir.c_str()))
+            continue;
+        INFO("Parsing directory %s...\n", dir.c_str());
+        std::unique_ptr<DIR, int(*)(DIR*)> config_dir(opendir(dir.c_str()), closedir);
+        if (!config_dir) {
+            ERROR("Could not import directory '%s'\n", dir.c_str());
+            return;
+        }
+        dirent* current_file;
+        while ((current_file = readdir(config_dir.get()))) {
+            std::string current_path =
+                android::base::StringPrintf("%s/%s", dir.c_str(), current_file->d_name);
+            // Ignore directories and only process regular files.
+            if (current_file->d_type == DT_REG) {
+                if (!init_parse_config_file(current_path.c_str())) {
+                    ERROR("could not import file '%s'\n", current_path.c_str());
+                }
+            }
+        }
+    }
+}
+
 /*
  * This function might request a reboot, in which case it will
  * not return.
@@ -441,6 +473,8 @@ int do_mount_all(int nargs, char **args)
         /* fork failed, return an error */
         return -1;
     }
+
+    import_late();
 
     if (ret == FS_MGR_MNTALL_DEV_NEEDS_ENCRYPTION) {
         property_set("vold.decrypt", "trigger_encryption");
