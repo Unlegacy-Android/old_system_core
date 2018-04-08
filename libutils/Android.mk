@@ -39,6 +39,10 @@ commonSources:= \
 
 host_commonCflags := -DLIBUTILS_NATIVE=1 $(TOOL_CFLAGS) -Werror
 
+ifeq ($(TARGET_NEEDS_VECTORIMPL_SYMBOLS),true)
+LOCAL_CFLAGS += -DNEEDS_VECTORIMPL_SYMBOLS
+endif
+
 # For the host
 # =====================================================
 include $(CLEAR_VARS)
